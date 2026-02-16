@@ -29,7 +29,9 @@ class Event:
 
     @staticmethod
     def from_spond(spond_event):
-        group_id = spond_event.get("recipients", {}).get("group", {}).get("id")
+        group = spond_event.get("recipients", {}).get("group", {})
+        group_id = group.get("id")
+        group_names = [group.get("name")] + [subgroup["name"] for subgroup in group.get("subGroups", [])]
 
         # Don't copy full description for the Juniors
         if group_id == SPOND_JUNIORS_GROUP:
@@ -37,6 +39,7 @@ class Event:
         else:
             description = spond_event["description"] or ""
             description += "\r\n\r\n<em>This event was automatically synchronised from Spond. Please respond there.</em>"
+        description += f"\r\n<em>Spond Groups: {', '.join(group_names)}</em>"
         description = Event.__trim(description)
 
         cancelled = "cancelled" in spond_event and spond_event["cancelled"]
