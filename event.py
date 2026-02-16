@@ -1,9 +1,17 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Self
 from zoneinfo import ZoneInfo
 
 import pytz
+
+SPOND_JUNIORS_GROUP = 'E1604708D52A4BF8B4583435A48C10D0'
+SPOND_SENIORS_GROUP = 'E115E8334BA948D5AC3EF2EE56B54B81'
+
+SPOND_GROUP_TO_WORDPRESS_ID = {
+    SPOND_SENIORS_GROUP: 41,
+    SPOND_JUNIORS_GROUP: 55,
+}
 
 @dataclass
 class Event:
@@ -17,14 +25,18 @@ class Event:
     location_address: str
     location_longitude: float
     location_latitude: float
-    groups: list[str]
+    age_group_ids: list[int]
 
     @staticmethod
     def from_spond(spond_event):
-        group = spond_event.get("recipients", {}).get("group", {})
+        group_id = spond_event.get("recipients", {}).get("group", {}).get("id")
 
-        description = spond_event["description"] or ""
-        description += "\r\n\r\n<em>This event was automatically synchronised from Spond. Please respond there.</em>"
+        # Don't copy full description for the Juniors
+        if group_id == SPOND_JUNIORS_GROUP:
+            description = "<em>This event was automatically synchronised from Spond. Please view details there.</em>"
+        else:
+            description = spond_event["description"] or ""
+            description += "\r\n\r\n<em>This event was automatically synchronised from Spond. Please respond there.</em>"
         description = Event.__trim(description)
 
         cancelled = "cancelled" in spond_event and spond_event["cancelled"]
@@ -40,7 +52,7 @@ class Event:
             location_address=Event.__trim(spond_event.get("location", {}).get("address")) or "",
             location_longitude=Event.__to_float(spond_event.get("location", {}).get("longitude")),
             location_latitude=Event.__to_float(spond_event.get("location", {}).get("latitude")),
-            groups = [group.get("name")] + [subgroup.get("name") for subgroup in group.get("subGroups", [])],
+            age_group_ids= [i for i in [SPOND_GROUP_TO_WORDPRESS_ID.get(group_id)] if i is not None]
         )
 
     @staticmethod
@@ -66,7 +78,7 @@ class Event:
             location_address=location.get("address") or "",
             location_longitude=Event.__to_float(location.get("lng")),
             location_latitude=Event.__to_float(location.get("lat")),
-            groups = [str(type) for type in fixture.get("fixture-type", [])]  # Can map Spond groups to fixture type?
+            age_group_ids= fixture.get("fixture-age", [])
         )
 
     @staticmethod
@@ -99,12 +111,13 @@ class Event:
 
     def is_modified(self, other):
         result = self.title != other.title or self.information != other.information or \
-            self.start != other.start or self.end != other.end or \
-            self.location_name != other.location_name or self.location_address != other.location_address or \
-            self.location_longitude != other.location_longitude or self.location_latitude != other.location_latitude
+                 self.start != other.start or self.end != other.end or \
+                 self.location_name != other.location_name or self.location_address != other.location_address or \
+                 self.location_longitude != other.location_longitude or self.location_latitude != other.location_latitude or \
+                 self.age_group_ids != other.age_group_ids
         return result
 
-    def to_wordpress(self, wordpress_id):
+    def to_wordpress(self, wordpress_id, existing_wordpress: Optional[Self]):
 
         local_start = self.start.astimezone(ZoneInfo('Europe/London'))
         local_end = self.end.astimezone(ZoneInfo('Europe/London'))
@@ -120,10 +133,18 @@ class Event:
                 "zoom": 17
             }
 
+        # Preserve any groups that we are not interested in
+        age_group_ids = set()
+        if existing_wordpress:
+            age_group_ids.update(existing_wordpress.age_group_ids)
+            age_group_ids.discard(SPOND_GROUP_TO_WORDPRESS_ID.values())
+        age_group_ids.update(self.age_group_ids)
+
         return {
             "id": wordpress_id,
             "status": "publish",
             "title": self.title,
+            "fixture-age": list(age_group_ids),
             "acf": {
                 "information": self.information,
                 "start_date": local_start.strftime("%Y%m%d") if local_start else None,

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import yaml
 from spond import spond
 
-from event import Event
+from event import Event, SPOND_SENIORS_GROUP, SPOND_JUNIORS_GROUP
 from wordpress_client import WordPressClient
 
 
@@ -29,7 +29,12 @@ async def main():
     wordpress_id_by_spond_id = {value.spond_id: key for key, value in wordpress_fixtures_by_wordpress_id.items()}
     logger.info(f"Loaded {len(wordpress_id_by_spond_id)} fixtures from WordPress")
 
-    spond_events = {e["id"]: Event.from_spond(e) for e in await spond_client.get_events(group_id="E115E8334BA948D5AC3EF2EE56B54B81", include_scheduled=True, include_hidden=True, min_start=now)}
+    senior_spond_events = {e["id"]: Event.from_spond(e) for e in await spond_client.get_events(group_id=SPOND_SENIORS_GROUP, include_scheduled=True, include_hidden=True, min_start=now)}
+    junior_spond_events = {e["id"]: Event.from_spond(e) for e in await spond_client.get_events(group_id=SPOND_JUNIORS_GROUP, include_scheduled=True, include_hidden=True, min_start=now)}
+    spond_events = dict()
+    spond_events.update(senior_spond_events)
+    spond_events.update(junior_spond_events)
+
     await spond_client.clientsession.close()
     logger.info(f"Loaded {len(spond_events)} events from Spond")
 
@@ -41,10 +46,10 @@ async def main():
             if wordpress_fixture.start > now:
                 wordpress_client.delete(wordpress_id, wordpress_fixture)
         elif wordpress_fixture.is_modified(latest_from_spond):
-            wordpress_client.update(wordpress_id, latest_from_spond)
+            wordpress_client.update(wordpress_id, latest_from_spond, wordpress_fixture)
 
     for spond_id, spond_event in spond_events.items():
-        if spond_id not in wordpress_id_by_spond_id.keys() and spond_event.start > now:
+        if spond_id not in wordpress_id_by_spond_id.keys() and spond_event.start > now and spond_event.status != 'cancelled':
             wordpress_client.insert(spond_event)
 
 loop = asyncio.new_event_loop()

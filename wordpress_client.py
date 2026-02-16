@@ -37,10 +37,10 @@ class WordPressClient:
                                     "Accept": "application/json",
                                     "User-Agent": "SyncFromSpond"
                                 },
-                                json=fixture.to_wordpress(None))
+                                json=fixture.to_wordpress(None, None))
         response.raise_for_status()
 
-    def update(self, wordpress_id, fixture):
+    def update(self, wordpress_id, fixture, existing_fixture):
         self.logger.info(f"Updating {fixture.title} [{wordpress_id}] (Spond {fixture.spond_id})")
         response = requests.put(f"https://{self.hostname}/wp-json/wp/v2/fixture/{wordpress_id}",
                      auth=self.auth,
@@ -49,7 +49,7 @@ class WordPressClient:
                          "Accept": "application/json",
                          "User-Agent": "SyncFromSpond"
                      },
-                     json=fixture.to_wordpress(wordpress_id))
+                     json=fixture.to_wordpress(wordpress_id, existing_fixture))
         response.raise_for_status()
 
     def delete(self, wordpress_id, fixture):
