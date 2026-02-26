@@ -113,11 +113,11 @@ class Event:
         return value.strip()
 
     def is_modified(self, other):
+        # Don't compare age group ids, if they have been updated on the website that is more specific
         result = self.title != other.title or self.information != other.information or \
                  self.start != other.start or self.end != other.end or \
                  self.location_name != other.location_name or self.location_address != other.location_address or \
-                 self.location_longitude != other.location_longitude or self.location_latitude != other.location_latitude or \
-                 self.age_group_ids != other.age_group_ids
+                 self.location_longitude != other.location_longitude or self.location_latitude != other.location_latitude
         return result
 
     def to_wordpress(self, wordpress_id, existing_wordpress: Optional[Self]):
